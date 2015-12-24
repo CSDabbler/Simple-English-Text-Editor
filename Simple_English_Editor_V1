@@ -1,0 +1,529 @@
+import tkinter as tk
+import tkinter.scrolledtext as tkst
+import os
+from tkinter.scrolledtext import ScrolledText
+from tkinter import *
+from tkinter import Menu
+import tkinter.messagebox
+import nltk
+from nltk.tokenize import word_tokenize
+from nltk.corpus import words
+from nltk.corpus.reader.plaintext import PlaintextCorpusReader
+from nltk.corpus import names
+import urllib
+from urllib.request import urlopen
+from urllib.request import Request, urlopen
+from urllib.error import  URLError
+from nltk.corpus import wordnet as wn
+
+# Dictionaries selected
+basic_english_words = words.words('en-basic')
+voa_simple_english_words = None
+nltk_names = None
+
+use_basic_english = True
+use_voa_simple_english = False
+use_nltk_names = False
+use_csv_dictionary = False
+
+use_ngsl = False
+ngsl_words = None
+
+use_wordnet = False
+use_wordnet_subject = None
+wn_subject = None
+wn_subject_words = None
+
+use_foldoc = False
+
+main_window = tk.Tk(className="Special English Text Editor")
+main_window.title('Special English Text Editor')
+main_window.geometry('300x200')
+edit_space = tkst.ScrolledText(
+    master = main_window,
+    wrap = 'word', # wrap text at full words only
+    undo = TRUE,
+    #width = 25, # characters
+    #height = 10, # text lines
+    bg='beige'  # background color of edit area
+)
+
+file_name = 'placeholder.txt'
+dirty_edit_space = False
+
+#def dummy():
+    #print ("dummy Command to be removed later")
+
+def undo(event = None):
+    edit_space.event_generate("<<Undo>>") # <<Undo>> is TCL command, not python
+    
+def cut(event = None):
+    edit_space.event_generate("<<Cut>>")  # <<Cut>> is TCL command
+    
+def copy(event = None):
+    edit_space.event_generate("<<Copy>>") # <<Copy>> is TCL command
+    
+def paste(event = None):
+    edit_space.event_generate("<<Paste>>") # <<Paste>> is TCL command
+
+def on_key_press():
+    global dirty_bit
+    dirty_edit_space = True
+
+# file icons 
+open_file_icon = PhotoImage(file='icons/open_file.gif')
+save_file_icon = PhotoImage(file='icons/Save.gif')
+
+# edit icons 
+undo_icon = PhotoImage(file='icons/Undo.gif')
+cut_icon = PhotoImage(file='icons/Cut.gif')
+copy_icon = PhotoImage(file='icons/Copy.gif')
+pasteicon = PhotoImage(file='icons/Paste.gif')
+
+def open_file(event=None):
+    global file_name
+    dirty_edit_space = False
+    file_name = filedialog.askopenfilename(defaultextension=".txt",filetypes=[("All Files","*.*"),("Text Documents","*.txt")])
+    if file_name == "": # If no file chosen.
+        file_name = None # Absence of file.
+    else:
+        main_window.title(os.path.basename(file_name)) # Returning the basename of 'file'
+        edit_space.delete(1.0,END)
+        fh = open(file_name,"r")
+        edit_space.insert(1.0,fh.read())
+        fh.close()
+
+# save file function
+def save_file():
+    global file_name
+    global dirty_edit_space
+    try:
+        f = open(file_name, 'w')
+        content = edit_space.get(1.0, 'end')
+        f.write(content)
+        f.close()
+        dirty_edit_space = False
+    except:
+        file_name = None
+
+def save_as():
+    global file_name
+    global dirty_edit_space
+    file_name = filedialog.asksaveasfilename()
+    try:
+        f = open(file_name, 'w')
+        content = edit_space.get(1.0, 'end')
+        f.write(content)
+        f.close()
+        dirty_edit_space = False
+    except:
+        file_name = None
+        
+def exit_main_window():
+    global dirty_edit_space
+    if dirty_edit_space:
+        isOK = tkinter.messagebox.askokcancel("Go ahead w/o saving new edits?", "OK?")
+        if isOK:
+           main_window.destroy
+           dirty_edit_space = False
+    
+def on_find():
+    find_window = Toplevel(main_window)
+    find_window.title('Find')
+    find_window.geometry('262x65+200+250')
+    find_window.transient(main_window)
+    find_window.bg='beige'  # background color of edit area
+    Label(find_window, text="Find All:").grid(row=0, column=0, sticky='e')
+    find_value = StringVar()
+    entry_field = Entry(find_window, width=25, textvariable = find_value)
+    entry_field.grid(row=0, column=1, padx=2, pady=2, sticky='we')
+    entry_field.focus_set()
+    ignore_case = IntVar()
+    Checkbutton(find_window, text='Ignore Case', variable=ignore_case).grid(row=1, column=1, sticky='e', padx=2, pady=2)
+    Button(
+        find_window,
+        text = "Find All",
+        underline = 0,
+        command = lambda: search_for(find_value.get(), ignore_case.get(), edit_space, find_window, entry_field)).grid(row = 0, column = 2, sticky = 'e' + 'w', padx = 2, pady = 2)
+    def close_search():
+        edit_space.tag_remove('match', '1.0', END)
+        find_window.destroy()
+    find_window.protocol('WM_DELETE_WINDOW', close_search) # override close button
+
+# find the needle in the haystack
+def search_for(needle, ignore_case, text_haystack, find_window, entry_field):
+    edit_space.tag_remove('match', '1.0', END)
+    count =0
+    if needle:
+        pos = '1.0'
+        while True:
+            pos = text_haystack.search(needle, pos, nocase = ignore_case, stopindex = END)
+            if not pos: break
+            lastpos = '%s+%dc' % (pos, len(needle))
+            text_haystack.tag_add('match', pos, lastpos)
+            count += 1
+            pos = lastpos
+        text_haystack.tag_config('match', foreground='red', background='yellow')
+    entry_field.focus_set()
+    find_window.title('%d matches found' %count)
+
+#
+# Dictionaries selected
+#basic_english_words = words.words('en-basic')
+#use_basic_english = True
+#use_voa_simple_english = False
+#use_csv_dictionary = False
+#use_wordnet = False
+#use_wordnet_subject = None
+#
+def check_words():
+    global edit_space
+    global use_basic_english
+    global basic_english_words
+    global use_nltk_names
+    global nltk_names
+    global use_voa_simple_english
+    global voa_simple_english_words
+    global use_ngsl
+    global ngsl_words
+    global use_foldoc
+    text = edit_space.get(0.1, END)
+    #print(words)
+    tokens = word_tokenize(text)
+    punctuation_marks = [',', '.', ';', '?', ':']
+    for token in tokens:
+        if not(token in punctuation_marks):
+            token_lower = token.lower()
+            acceptable = False
+            if use_basic_english == True:
+                if token_lower in basic_english_words:
+                    acceptable = True
+            if use_voa_simple_english == True and acceptable == False:
+                if token_lower in voa_simple_english_words:
+                    acceptable = True
+            if use_nltk_names == True and acceptable == False:
+                if token in nltk_names:
+                    acceptable = True
+            if use_ngsl == True and acceptable == False:
+                if token in ngsl_words:
+                    acceptable = True
+            if use_foldoc == True and acceptable == False:
+                word_url = 'https://foldoc.org/' + token
+                print("word_url: ", word_url)
+                req = Request(word_url)
+                try:
+                    response = urlopen(req)
+                except URLError as e:
+                    if hasattr(e, 'reason'):
+                        print('We failed to reach FOLDOC server.')
+                        print('Reason: ', e.reason)
+                    elif hasattr(e, 'code'):
+                        print('The FOLDOC server couldn\'t fulfill the request.')
+                        print('Error code: ', e.code)
+                else:
+                    # everything is fine
+                    raw_text = response.read()
+                    mystr = raw_text.decode("utf8")
+                    #print(raw_text)
+                    if "No match" not in mystr:
+                        acceptable = True;
+        if acceptable == False:
+            tkinter.messagebox.showinfo(token," not in any of the chosen dictionaries")
+
+def select_dictionaries():
+    global use_basic_english
+    global use_voa_simple_english
+    global voa_simple_english_words
+    global names
+    global use_nltk_names
+    global nltk_names
+    global use_wordnet
+    global use_wordnet_subject
+    global wn_subject
+    global use_csv_dictionary
+    global use_foldoc
+    #global var1
+    #global var2
+    #global var3
+    #global var4
+    wn_subjects = {}
+    dictionary_window = Toplevel(main_window)
+    dictionary_window.title('Dictionaries')
+    dictionary_window.geometry('262x365+200+250')
+    dictionary_window.bg='beige'  # background color of edit area
+    dictionary_window.transient(main_window)
+    Label(dictionary_window, text="Check all appropriate sources:").grid(row=0, column=0, sticky='e')
+    var1 = IntVar()
+    def update_basic_english():
+        global use_basic_english
+        nonlocal var1
+        if var1.get() == 1:
+            use_basic_english = True
+            print(var1.get())
+            print("using Basic English")
+        else:
+            use_basic_english = False
+            print(var1.get())            
+            print("not using Basic English")
+    chk_btn_basic = Checkbutton(dictionary_window, text="Ogden Basic English 850 words", variable=var1, command=update_basic_english)
+    chk_btn_basic.grid(row=1, sticky=W)
+    chk_btn_basic.select()
+    var2 = IntVar()
+    def update_voa_simple_english():
+        global use_voa_simple_english
+        global voa_simple_english_words
+        nonlocal var2
+        if var2.get() == 1:
+            use_voa_simple_english = True
+            print(var2.get())
+            print("loading VOA Simple English")
+            voa_simple_english_words_corpus = PlaintextCorpusReader('./','voaSpecialEnglish.txt')
+            file_ids = voa_simple_english_words_corpus.fileids()
+            #print("VOA Simple English file info")
+            #for f in file_ids:
+                #print("file id: ", f)
+            voa_simple_english_words = voa_simple_english_words_corpus.words() # returns list of string
+            length = len(voa_simple_english_words)
+            print("VOA Special English has ", length, " words.")
+        else:
+            use_voa_simple_english = False
+            print(var2.get())
+            print("not using VOA Simple English")
+    Checkbutton(dictionary_window, text="VOA Simple English", variable=var2, command=update_voa_simple_english).grid(row=2, sticky=W)
+    var2b = IntVar()
+    def update_ngsl():
+        global use_ngsl
+        global ngsl_words
+        nonlocal var2b
+        if var2b.get() == 1:
+            use_ngsl = True
+            print(var2b.get())
+            print("loading New General Service List")
+            ngsl_words_corpus = PlaintextCorpusReader('./','ngsl_Headwords.txt')
+            #file_ids = voa_simple_english_words_corpus.fileids()
+            #print("VOA Simple English file info")
+            #for f in file_ids:
+                #print("file id: ", f)
+            ngsl_words = ngsl_words_corpus.words() # returns list of string
+            length = len(ngsl_words)
+            print("NGSL New General Service List has ", length, " words.")
+        else:
+            use_ngsl = False
+            print(var2b.get())
+            print("not using NGSL New General Service List")
+    Checkbutton(dictionary_window, text="NGSL", variable=var2b, command=update_ngsl).grid(row=3, sticky=W)
+    var3 = IntVar()
+    def update_nltk_names():
+        global names
+        global use_nltk_names
+        global nltk_names
+        nonlocal var3
+        if var3.get() == 1:
+            use_nltk_names = True
+            print(var3.get())
+            print("loading NLTK personal names")
+            nltk_names = names.words('male.txt') + names.words('female.txt')
+            length = len(nltk_names)
+            print("NLTK has ", length, " personal names.")
+        else:
+            use_nltk_names = False
+            print(var3.get())
+            print("not using NLTK personal names")
+    Checkbutton(dictionary_window, text="NLTK personal names", variable=var3, command=update_nltk_names).grid(row=4, sticky=W)
+    var4 = IntVar()
+    def update_wordnet():
+        global use_wordnet
+        nonlocal var4
+        if var4.get() == 1:
+            use_wordnet = True
+            print(var4.get())
+            print("using WordNet")
+        else:
+            
+            use_wordnet = False
+            print(var4.get())
+            print("not using WordNet")
+    Checkbutton(dictionary_window, text="Entire WordNet", variable=var4, command=update_wordnet).grid(row=5, sticky=W)
+    var5 = StringVar()
+    subject_label = Entry(dictionary_window, text="Enter WordNet subject", textvariable = var5, width = 30)
+    subject_label.delete(0, END)
+    subject_label.insert(0, "Enter WordNet subject")
+    subject_label.grid(row=6, column=0)
+    #e1 = Entry(dictionary_window)
+    #e1.grid(row=5, column=1)
+    def get_wn_subject_list():
+        global use_wordnet_subject
+        global wn_subject_words
+        global wn_subjects
+        wn_subject_synset = None
+        for lemma in wn_subjects:
+            if wn_subjects[lemma].get() == 1:
+                wn_subject_synset = subject.synset
+                print("Collecting wn for synset: ", synset.dictionary())
+        hyponyms = set()
+        for hyponym in wn_subject_synset.hyponyms():
+            hyponyms |= set(get_hypo_meronyms(hyponym))
+        part_meronyms = set()    
+        for meronym in wn_subject_synset.part_meronyms():
+            part_meronyms |= set(get_hypo_meronyms(meronym))
+        instance_hyponyms = set()
+        for instance in wn_subject_synset.instance_hyponyms():
+            instance_hyponyms |= set(get_hypo_meronyms(instance))
+        wn_subject_words = \
+            hyponyms | set(wn_subject_synset.hyponyms()) | \
+            part_meronyms | set(wn_subject_synset.part_meronyms()) | \
+            instance_hyponyms | set(wn_subject_synset.instance_hyponyms())
+    var_wn_synset_id = IntVar()
+    def wordnet_subject_update():
+        global use_wordnet_subject
+        global wn_subjects
+        global wn_subject
+        global wn_subject_words
+        #nonlocal var5
+        var_wn_synset_id = None
+        wn_subject = var5.get()
+        print("subject: ", wn_subject, " :")
+        wn_synsets = wn.synsets(wn_subject)
+        print("synsets: ", wn_synsets)
+        wn_subject_words = []
+        wn_subjects = {}
+        wn_subject_window = Toplevel(main_window)
+        wn_subject_window_title = 'Which sense of ' + wn_subject
+        wn_subject_window.title(wn_subject_window_title)
+        wn_subject_window.geometry('462x165+400+150')
+        wn_subject_window.bg='brown'  # background color of edit area
+        row_id = 1
+        for synset in wn_synsets:
+            wn_subjects[synset] = StringVar()
+            definition = synset.definition()
+            print("definition: ", definition)
+            chk_btn = Checkbutton(wn_subject_window, text=definition, variable=wn_subjects[synset], command=get_wn_subject_list)
+            chk_btn.grid(row=row_id, sticky=W)
+            row_id += 1
+        dictionary_window.transient(main_window)
+    Button(dictionary_window,
+           text='Update WordNet Subject',
+           command=wordnet_subject_update).grid(row=7, sticky=W, pady=4)
+    var6 = IntVar()
+    def update_foldoc():
+        global use_foldoc
+        nonlocal var6
+        if var6.get() == 1:
+            use_foldoc = True
+            print(var6.get())
+            print("using FOLDOC")
+        else:           
+            use_foldoc = False
+            print(var4.get())
+            print("not using FOLDOC")
+    Checkbutton(dictionary_window,
+                text="FOLDOC 750,000 computer terms",
+                variable=var6,
+                command=update_foldoc).grid(row=8, sticky=W)
+    #Button(dictionary_window, text='Show', command=show_dictionary).grid(row=7, sticky=W, pady=4)
+    def close_dictionary():
+        dictionary_window.destroy()
+    dictionary_window.protocol('WM_DELETE_WINDOW', close_dictionary) # override close button
+
+    
+def about_desc():
+    tkinter.messagebox.showinfo("About Special English Text Editor",
+        "An open source python-based program to encourage writing text in Special English"
+        )
+    
+main_menu = Menu(main_window)
+main_window.config(menu=main_menu)
+
+file_menu = Menu(main_menu)
+main_menu.add_cascade(
+    label="File",
+    menu=file_menu)
+file_menu.add_command(
+    label="Open",
+    accelerator='Ctrl+O',
+    compound=LEFT,
+    image=open_file_icon,
+    underline = 0,
+    command=open_file
+    )
+
+file_menu.add_command(
+    label="Save",
+    accelerator='Ctrl+S',
+    compound=LEFT,
+    image=save_file_icon,
+    underline=0,
+    command=save_file
+    )
+file_menu.add_command(label="Save As", command = save_as)
+file_menu.add_separator()
+file_menu.add_command(
+    label="Exit",
+    command = exit_main_window
+    )
+
+edit_menu = Menu(main_menu)
+main_menu.add_cascade(label="Edit", menu=edit_menu)
+edit_menu.add_command(
+    label="Undo",
+    compound=LEFT,
+    image=undo_icon,
+    accelerator='Ctrl+Z',
+    command = undo)
+edit_menu.add_separator() 
+edit_menu.add_command(
+    label="Cut",
+    compound = LEFT,
+    image = cut_icon,
+    accelerator='Ctrl+X',
+    command = cut)
+edit_menu.add_command(
+    label = "Copy",
+    compound = LEFT,
+    image = copy_icon,
+    accelerator='Ctrl+C',
+    command = copy)
+edit_menu.add_command(
+    label="Paste",
+    compound=LEFT,
+    image=pasteicon,
+    accelerator='Ctrl+V',
+    command = paste)
+edit_menu.add_separator()
+edit_menu.add_command(
+    label = "Find",
+    underline = 0,
+    accelerator = 'Ctrl+F',
+    command = on_find)
+#edit_menu.add_command(label="Select All", underline=7, accelerator='Ctrl+A', command=select_all)
+edit_menu.add_command(
+    label="Words",
+    #underline= 0,
+    #accelerator='Ctrl+W',
+    command = check_words)
+edit_menu.add_command(
+    label="Dictionary",
+    #underline= 0,
+    #accelerator='Ctrl+W',
+    command = select_dictionaries)
+
+help_menu = Menu(main_menu)
+main_menu.add_cascade(label="Help", menu=help_menu)
+help_menu.add_command(label="About...", command=about_desc)
+# end of menu creation
+edit_space.pack(fill = BOTH, expand = 1)
+
+#edit_space.bind('<Control-N>', new_file)
+#edit_space.bind('<Control-n>', new_file)
+edit_space.bind('<Control-O>', open_file)
+edit_space.bind('<Control-o>', open_file)
+edit_space.bind('<Control-S>', save_file)
+edit_space.bind('<Control-s>', save_file)
+#edit_space.bind('<Control-A>', select_all)
+#edit_space.bind('<Control-a>', select_all)
+edit_space.bind('<Control-f>', on_find)
+edit_space.bind('<Control-F>', on_find)
+#edit_space.bind('<KeyPress-F1>', help_box)
+edit_space.bind('<KeyPress-F1>', on_key_press)
+
+main_window.mainloop()
